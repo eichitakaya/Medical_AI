@@ -2,6 +2,7 @@ import glob
 import torch
 import numpy as np
 import nibabel as nib
+from PIL import Image
 
 class SegmentationDecathlon(torch.utils.data.Dataset):
     def __init__(self, name, traintest="train"):
@@ -46,11 +47,31 @@ class SegmentationDecathlon(torch.utils.data.Dataset):
         
 
     def __len__(self):
-        return 
 
-    def __getitem__():
-        return
+        return len(self.slice_list)
+
+    def __getitem__(self, index):
+        # ラベルが含まれるスライスのみを返すかどうか，要検討（やるならinitでも？）
+        image_path, num = self.slice_list[index].split("__")
+        label_path = image_path.replace("imagesTr", "labelsTr")
+
+        # z軸の位置，軸の数，モダリティの数で場合分けが必要
+        print(image_path)
+        print(nib.load(image_path).get_data().shape)
+        one_slice = nib.load(image_path).get_data()[:, :, num]
+        one_slice = np.expand_dims(one_slice, 0)
+        one_slice = torch.tensor(one_slice)
+
+        one_label = nib.load(label_path).get_data()[:, :, num]
+        one_label = np.expand_dims(one_label, 0)
+        # たぶん正規化が必要
+
+        return one_slice, one_label
 
 if __name__ == "__main__":
-    hippo = SegmentationDecathlon(name="heart", traintest="train")
-    print(hippo.slice_list)
+    from torch.utils.data import DataLoader
+    spleen = SegmentationDecathlon(name="spleen", traintest="train")
+    spleen_loader = DataLoader(spleen, batch_size=5, shuffle=True)
+    for i, data in enumerate(spleen_loader):
+        print(data[0].shape)
+        print(data[1].shape)
