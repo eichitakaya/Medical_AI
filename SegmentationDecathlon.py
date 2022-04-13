@@ -27,7 +27,7 @@ class SegmentationDecathlon(torch.utils.data.Dataset):
         }
         assert name.lower() in dataset_dir, "The Spefified dataset {} does not exist.".format(name)
         
-        # dataフォルダのあるディレクトリの絶対パス(コマンドライン引数にしてもいいかも？)
+        # dataフォルダのあるディレクトリの絶対パス(initの引数にしてもいいかも？)
         datafolder_path = "/takaya_workspace/data/decathlon/"
 
         self.dataset_path = datafolder_path + dataset_dir[name.lower()][0]
@@ -82,6 +82,8 @@ class SegmentationDecathlon(torch.utils.data.Dataset):
         # たぶん正規化が必要
 
         return one_slice, one_label
+
+
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
