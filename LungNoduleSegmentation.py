@@ -1,7 +1,7 @@
 import glob
 import torch
 import numpy as np
-import nibabel as nib
+import pydicom
 from PIL import Image
 
 class LungNoduleSegmentation(torch.utils.data.Dataset):
@@ -9,7 +9,8 @@ class LungNoduleSegmentation(torch.utils.data.Dataset):
     def __init__(self, name, traintest="train"):
         super().__init__()
         """
-
+        まずは全てのスライスに対するパスを取得する
+        病変毎に管理するリストも用意する
         """
         assert traintest.lower() == "train" or traintest.lower() == "test", "traintest must be 'train' or 'test'."
 
