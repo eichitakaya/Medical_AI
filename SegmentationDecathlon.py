@@ -87,6 +87,7 @@ class SegmentationDecathlon(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
+    import pdb; pdb.set_trace()
     spleen = SegmentationDecathlon(name="spleen", traintest="train")
     spleen_loader = DataLoader(spleen, batch_size=5, shuffle=True)
     print(len(spleen))
