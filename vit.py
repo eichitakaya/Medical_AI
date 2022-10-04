@@ -77,10 +77,10 @@ class MultiHeadSelfAttention(nn.Module):
         )
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        '''
+        """
         z: (B, N, D)
         out: (B, N, D)
-        '''
+        """
 
         batch_size, num_patch, _ = z.size()
         
@@ -102,14 +102,126 @@ class MultiHeadSelfAttention(nn.Module):
         # (B, h, N, D//h) -> (B, h, D//h, N)
         k_T = k.transpose(2, 3)
 
-        ## (B, h, N, D//h) × (B, h, D//h, N) -> (B, h, N, N)
-        dots = (q @ k_)
+        # (B, h, N, D//h) × (B, h, D//h, N) -> (B, h, N, N)
+        dots = (q @ k_T) / self.sqrt_dh
 
+        attn = F.softmax(dots, dim=-1)
+        attn = self.attn_drop(attn)
+
+        # (B, h, N, N) × (B, h, N, D//h) -> (B, h, N, D//h)
+        out = attn @ v
+        # (B, h, N, D//h) -> (B, N, h, D//h)
+        out = out.transpose(1, 2)
+        # (B, N, h, D//h) -> (B, N, D)
+        out = out.reshape(batch_size, num_patch, self.emb_dim)
+
+        # (B, N, D) -> (B, N, D)
+        out = self.w_o(out)
+
+        return out
+
+class VitEncoderBlock(nn.Module):
+    def __init__(
+        self,
+        emb_dim:int=384,
+        head:int=8,
+        hidden_dim:int=384*4,
+        dropout:float=0.
+        ):
+
+        super(VitEncoderBlock, self).__init__()
+
+        self.ln1 = nn.LayerNorm(emb_dim)
+
+        self.msa = MultiHeadSelfAttention(
+            emb_dim=emb_dim,
+            head=head,
+            dropout = dropout,
+        )
+
+        self.ln2 = nn.LayerNorm(emb_dim)
+
+        self.mlp = nn.Sequential(
+            nn.Linear(emb_dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, emb_dim),
+            nn.Dropout(dropout)
+        )
+    
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        """
+        z: (B, N, D)
+        out: (B, N, D)
+        """
+
+        out = self.msa(self.ln1(z)) + z
+        out = self.mlp(self.ln2(out)) + out
+        
+        return out
+
+class Vit(nn.Module):
+    def __init__(self,
+        in_channels:int=3,
+        num_classes:int=10,
+        emb_dim:int=384,
+        num_patch_row:int=2,
+        image_size:int=32,
+        num_blocks:int=7,
+        head:int=8,
+        hidden_dim:int=384*4,
+        dropout:float=0.
+        ):
+
+        super(Vit, self).__init__()
+
+        self.input_layer = VitInputLayer(
+            in_channels,
+            emb_dim,
+            num_patch_row,
+            image_size)
+        
+        self.encoder = nn.Sequential(*[
+            VitEncoderBlock(
+                emb_dim=emb_dim,
+                head=head,
+                hidden_dim=hidden_dim,
+                dropout = dropout
+            )
+            for _ in range(num_blocks)])
+
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(emb_dim),
+            nn.Linear(emb_dim, num_classes)
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: (B, C, H, W)
+        out: (B, M)
+        """
+
+        # (B, C, H, W) -> (B, N, D)
+        out = self.input_layer(x)
+
+        # (B, N, D) -> (B, N, D)
+        out = self.encoder(out)
+
+        # (B, N, D) -> (B, D)
+        cls_token = out[:,0]
+
+        # (B, D) -> (B, M)
+        pred = self.mlp_head(cls_token)
+        
+        return pred
 
 if __name__ == '__main__':
+    num_classes = 10
     batch_size, channel, height, width = 2, 3, 32, 32
     x = torch.randn(batch_size, channel, height, width)
-    input_layer = VitInputLayer(num_patch_row=2)
-    z_0 = input_layer(x)
+    
+    vit = Vit(in_channels=channel, num_classes=num_classes)
+    pred = vit(x)
 
-    print(z_0.shape) # (2, 5, 384)
+    print(pred.shape)
+
